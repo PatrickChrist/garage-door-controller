@@ -52,27 +52,6 @@ def verify_api_key(api_key: str) -> bool:
     """Verify API key"""
     return api_key == API_KEY
 
-async def require_admin(current_user: dict = Depends(get_current_user)):
-    """Require admin privileges"""
-    if not current_user["authenticated"]:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
-        )
-    
-    # API key users have admin access
-    if current_user["auth_type"] == "api_key":
-        return current_user
-    
-    # Check if user is admin
-    if "user_data" in current_user and not current_user["user_data"]["is_admin"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
-    
-    return current_user
-
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Get current authenticated user"""
     if not ENABLE_AUTH:
@@ -107,6 +86,27 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         )
     
     return {"user": user["username"], "authenticated": True, "auth_type": "jwt", "user_data": user}
+
+async def require_admin(current_user: dict = Depends(get_current_user)):
+    """Require admin privileges"""
+    if not current_user["authenticated"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    
+    # API key users have admin access
+    if current_user["auth_type"] == "api_key":
+        return current_user
+    
+    # Check if user is admin
+    if "user_data" in current_user and not current_user["user_data"]["is_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    
+    return current_user
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     """Authenticate user with username and password"""
