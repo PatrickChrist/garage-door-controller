@@ -249,7 +249,10 @@
                 if (response.ok) {
                     // Set session cookie and redirect
                     if (data.session_token) {
-                        document.cookie = `session_token=${data.session_token}; path=/; ${data.remember_me ? 'max-age=2592000; ' : ''}secure; samesite=strict`;
+                        // Set cookie (remove secure flag for HTTP development)
+                        const isHttps = location.protocol === 'https:';
+                        const secureFlag = isHttps ? 'secure; ' : '';
+                        document.cookie = `session_token=${data.session_token}; path=/; ${data.remember_me ? 'max-age=2592000; ' : ''}${secureFlag}samesite=strict`;
                     }
                     
                     // Redirect to main page
