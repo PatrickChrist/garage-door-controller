@@ -30,13 +30,12 @@ print_error() {
 
 check_user() {
     if [ "$EUID" -eq 0 ]; then
-        print_error "Please do not run this script as root. Run as user 'pi'."
+        print_error "Please do not run this script as root. Run as a regular user."
         exit 1
     fi
     
-    if [ "$(whoami)" != "pi" ]; then
-        print_warning "This script is designed for user 'pi'. Continuing anyway..."
-    fi
+    CURRENT_USER=$(whoami)
+    print_status "Setting up cron jobs for user: $CURRENT_USER"
 }
 
 backup_existing_crontab() {
@@ -53,26 +52,26 @@ backup_existing_crontab() {
 setup_maintenance_cron_jobs() {
     print_status "Setting up maintenance cron jobs..."
     
-    INSTALL_DIR="/home/pi/garage-controller"
+    INSTALL_DIR="$USER_HOME/garage-controller"
     
     # Remove existing garage-related cron jobs to avoid duplicates
     crontab -l 2>/dev/null | grep -v "garage" | grep -v "maintenance.sh" | crontab -
     
     # Add maintenance cron jobs
-    (crontab -l 2>/dev/null; cat << 'CRON_EOF'
+    (crontab -l 2>/dev/null; cat << CRON_EOF
 
 # Garage Door Controller Maintenance Jobs
 # Health check every 15 minutes
-*/15 * * * * /home/pi/garage-controller/maintenance.sh health >/dev/null 2>&1
+*/15 * * * * $INSTALL_DIR/maintenance.sh health >/dev/null 2>&1
 
 # Daily backup at 2 AM
-0 2 * * * /home/pi/garage-controller/maintenance.sh backup >/dev/null 2>&1
+0 2 * * * $INSTALL_DIR/maintenance.sh backup >/dev/null 2>&1
 
 # Weekly system update check on Sundays at 3 AM
-0 3 * * 0 /home/pi/garage-controller/maintenance.sh update >/dev/null 2>&1
+0 3 * * 0 $INSTALL_DIR/maintenance.sh update >/dev/null 2>&1
 
 # Monthly comprehensive maintenance on 1st day at 4 AM
-0 4 1 * * /home/pi/garage-controller/maintenance.sh all >/dev/null 2>&1
+0 4 1 * * $INSTALL_DIR/maintenance.sh all >/dev/null 2>&1
 
 CRON_EOF
     ) | crontab -
@@ -84,14 +83,14 @@ setup_duckdns_cron_job() {
     print_status "Checking for DuckDNS configuration..."
     
     # Check if DuckDNS is configured
-    if [ -f "/home/pi/duckdns/duck.sh" ]; then
+    if [ -f "$USER_HOME/duckdns/duck.sh" ]; then
         print_status "DuckDNS script found, adding cron job..."
         
         # Remove existing DuckDNS cron jobs to avoid duplicates
         crontab -l 2>/dev/null | grep -v "duck.sh" | crontab -
         
         # Add DuckDNS update cron job
-        (crontab -l 2>/dev/null; echo "*/5 * * * * /home/pi/duckdns/duck.sh >/dev/null 2>&1") | crontab -
+        (crontab -l 2>/dev/null; echo "*/5 * * * * $USER_HOME/duckdns/duck.sh >/dev/null 2>&1") | crontab -
         
         print_success "DuckDNS cron job added (updates every 5 minutes)"
     else
@@ -141,17 +140,18 @@ setup_system_monitoring() {
     print_status "Setting up system monitoring..."
     
     # Create monitoring script if it doesn't exist
-    MONITOR_SCRIPT="/home/pi/garage-controller/monitor.sh"
+    MONITOR_SCRIPT="$USER_HOME/garage-controller/monitor.sh"
     
     if [ ! -f "$MONITOR_SCRIPT" ]; then
         print_status "Creating system monitoring script..."
         
-        cat > "$MONITOR_SCRIPT" << 'MONITOR_EOF'
+        cat > "$MONITOR_SCRIPT" << MONITOR_EOF
 #!/bin/bash
 # System Monitoring Script for Garage Door Controller
 
 LOG_FILE="/var/log/garage-controller-monitor.log"
-INSTALL_DIR="/home/pi/garage-controller"
+USER_HOME="$USER_HOME"
+INSTALL_DIR="$USER_HOME/garage-controller"
 
 # Function to log with timestamp
 log_message() {
@@ -194,8 +194,8 @@ check_system_resources() {
 
 # Check DuckDNS status
 check_duckdns_status() {
-    if [ -f "/home/pi/duckdns/duck.log" ]; then
-        LAST_UPDATE=$(tail -1 /home/pi/duckdns/duck.log)
+    if [ -f "$USER_HOME/duckdns/duck.log" ]; then
+        LAST_UPDATE=$(tail -1 $USER_HOME/duckdns/duck.log)
         if [[ "$LAST_UPDATE" == *"failed"* ]]; then
             log_message "WARNING: DuckDNS update failed - $LAST_UPDATE"
         fi
@@ -222,7 +222,7 @@ MONITOR_EOF
     fi
     
     # Add monitoring cron job
-    (crontab -l 2>/dev/null; echo "*/30 * * * * /home/pi/garage-controller/monitor.sh >/dev/null 2>&1") | crontab -
+    (crontab -l 2>/dev/null; echo "*/30 * * * * $USER_HOME/garage-controller/monitor.sh >/dev/null 2>&1") | crontab -
     
     print_success "System monitoring cron job added (every 30 minutes)"
 }
@@ -242,7 +242,7 @@ display_cron_summary() {
     echo "  • System Monitor: Every 30 minutes"
     echo "  • Log Rotation: Sundays 1:00 AM"
     
-    if [ -f "/home/pi/duckdns/duck.sh" ]; then
+    if [ -f "$USER_HOME/duckdns/duck.sh" ]; then
         echo "  • DuckDNS Updates: Every 5 minutes"
     fi
     
@@ -255,8 +255,8 @@ display_cron_summary() {
     echo "  • Maintenance: /var/log/garage-controller-maintenance.log"
     echo "  • Monitoring: /var/log/garage-controller-monitor.log"
     
-    if [ -f "/home/pi/duckdns/duck.log" ]; then
-        echo "  • DuckDNS: /home/pi/duckdns/duck.log"
+    if [ -f "$USER_HOME/duckdns/duck.log" ]; then
+        echo "  • DuckDNS: $USER_HOME/duckdns/duck.log"
     fi
     
     echo
@@ -266,9 +266,9 @@ display_cron_summary() {
     echo "  • View logs: tail -f /var/log/garage-controller-*.log"
     echo
     echo "📋 Manual Commands:"
-    echo "  • Health check: /home/pi/garage-controller/maintenance.sh health"
-    echo "  • Backup: /home/pi/garage-controller/maintenance.sh backup"
-    echo "  • Update: /home/pi/garage-controller/maintenance.sh update"
+    echo "  • Health check: $USER_HOME/garage-controller/maintenance.sh health"
+    echo "  • Backup: $USER_HOME/garage-controller/maintenance.sh backup"
+    echo "  • Update: $USER_HOME/garage-controller/maintenance.sh update"
     echo
 }
 
@@ -290,6 +290,10 @@ main() {
     
     display_cron_summary
 }
+
+# Set up user paths
+CURRENT_USER=$(whoami)
+USER_HOME="/home/$CURRENT_USER"
 
 # Run main function
 main "$@"

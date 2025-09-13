@@ -13,8 +13,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-INSTALL_DIR="/home/pi/garage-controller"
+# Configuration - will be set dynamically based on current user
+INSTALL_DIR=""
 SERVICE_NAME="garage-controller"
 PYTHON_VERSION="3.9"
 
@@ -86,13 +86,24 @@ install_system_dependencies() {
 setup_user_permissions() {
     print_status "Setting up user permissions..."
     
+    # Get current user
+    CURRENT_USER=${SUDO_USER:-$(whoami)}
+    
+    # Check if user exists
+    if ! id "$CURRENT_USER" &>/dev/null; then
+        print_error "User '$CURRENT_USER' does not exist"
+        exit 1
+    fi
+    
+    print_status "Setting up permissions for user: $CURRENT_USER"
+    
     # Add user to gpio group
-    sudo usermod -a -G gpio pi
+    sudo usermod -a -G gpio "$CURRENT_USER"
     
     # Add user to systemd-journal group for log access
-    sudo usermod -a -G systemd-journal pi
+    sudo usermod -a -G systemd-journal "$CURRENT_USER"
     
-    print_success "User permissions configured"
+    print_success "User permissions configured for $CURRENT_USER"
 }
 
 clone_repository() {
@@ -408,7 +419,7 @@ setup_maintenance_cron_jobs() {
 # Garage Door Controller Maintenance Script
 
 LOG_FILE="/var/log/garage-controller-maintenance.log"
-INSTALL_DIR="/home/pi/garage-controller"
+INSTALL_DIR="$INSTALL_DIR"
 
 # Function to log with timestamp
 log_message() {
@@ -529,16 +540,16 @@ EOF
     (crontab -l 2>/dev/null; cat << 'CRON_EOF'
 # Garage Door Controller Maintenance
 # Health check every 15 minutes
-*/15 * * * * /home/pi/garage-controller/maintenance.sh health >/dev/null 2>&1
+*/15 * * * * $INSTALL_DIR/maintenance.sh health >/dev/null 2>&1
 
 # Daily backup at 2 AM
-0 2 * * * /home/pi/garage-controller/maintenance.sh backup >/dev/null 2>&1
+0 2 * * * $INSTALL_DIR/maintenance.sh backup >/dev/null 2>&1
 
 # Weekly system update check on Sundays at 3 AM
-0 3 * * 0 /home/pi/garage-controller/maintenance.sh update >/dev/null 2>&1
+0 3 * * 0 $INSTALL_DIR/maintenance.sh update >/dev/null 2>&1
 
 # Monthly log rotation on 1st day at 4 AM
-0 4 1 * * /home/pi/garage-controller/maintenance.sh all >/dev/null 2>&1
+0 4 1 * * $INSTALL_DIR/maintenance.sh all >/dev/null 2>&1
 CRON_EOF
     ) | crontab -
     
@@ -625,6 +636,15 @@ main() {
     echo "  Garage Door Controller - Auto Installer"
     echo "=========================================="
     echo
+
+    # Set installation directory based on current user
+    CURRENT_USER=${SUDO_USER:-$(whoami)}
+    if [ "$CURRENT_USER" = "root" ]; then
+        print_error "Please run this script as a regular user with sudo, not as root directly"
+        exit 1
+    fi
+    INSTALL_DIR="/home/$CURRENT_USER/garage-controller"
+    print_status "Installing to: $INSTALL_DIR"
 
     check_root
     check_raspberry_pi

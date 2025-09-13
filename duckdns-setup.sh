@@ -103,10 +103,10 @@ create_duckdns_script() {
     print_status "Creating DuckDNS update script..."
     
     # Create DuckDNS directory
-    mkdir -p /home/pi/duckdns
+    mkdir -p "$DUCKDNS_DIR"
     
     # Create update script
-    cat > /home/pi/duckdns/duck.sh << EOF
+    cat > "$DUCKDNS_DIR/duck.sh" << EOF
 #!/bin/bash
 
 # DuckDNS Update Script
@@ -114,7 +114,7 @@ create_duckdns_script() {
 
 DOMAIN="${DUCKDNS_DOMAIN}"
 TOKEN="${DUCKDNS_TOKEN}"
-LOGFILE="/home/pi/duckdns/duck.log"
+LOGFILE="$DUCKDNS_DIR/duck.log"
 
 # Get current external IP
 CURRENT_IP=\$(curl -s https://ipv4.icanhazip.com/)
@@ -130,8 +130,8 @@ else
 fi
 EOF
 
-    chmod +x /home/pi/duckdns/duck.sh
-    chown pi:pi -R /home/pi/duckdns/
+    chmod +x "$DUCKDNS_DIR/duck.sh"
+    chown "$CURRENT_USER:$CURRENT_USER" -R "$DUCKDNS_DIR"
     
     print_success "DuckDNS update script created"
 }
@@ -143,7 +143,7 @@ setup_cron_job() {
     crontab -l 2>/dev/null | grep -v "duck.sh" | crontab -
     
     # Add cron job to update every 5 minutes
-    (crontab -l 2>/dev/null; echo "*/5 * * * * /home/pi/duckdns/duck.sh >/dev/null 2>&1") | crontab -
+    (crontab -l 2>/dev/null; echo "*/5 * * * * $DUCKDNS_DIR/duck.sh >/dev/null 2>&1") | crontab -
     
     print_success "Cron job configured (updates every 5 minutes)"
 }
@@ -334,12 +334,12 @@ display_completion_info() {
     echo "   • DuckDNS updates every 5 minutes"
     echo
     echo "📁 Files Created:"
-    echo "   • /home/pi/duckdns/duck.sh (update script)"
-    echo "   • /home/pi/duckdns/duck.log (update log)"
+    echo "   • $DUCKDNS_DIR/duck.sh (update script)"
+    echo "   • $DUCKDNS_DIR/duck.log (update log)"
     echo
     echo "🔧 Management Commands:"
-    echo "   • Check IP updates: tail -f /home/pi/duckdns/duck.log"
-    echo "   • Manual update: /home/pi/duckdns/duck.sh"
+    echo "   • Check IP updates: tail -f $DUCKDNS_DIR/duck.log"
+    echo "   • Manual update: $DUCKDNS_DIR/duck.sh"
     echo "   • Test SSL: curl -I https://${DUCKDNS_URL}/health"
     echo
 }
@@ -364,9 +364,15 @@ main() {
 
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
-    print_error "Please do not run this script as root. Run as user 'pi'."
+    print_error "Please do not run this script as root. Run as a regular user."
     exit 1
 fi
+
+# Set up user paths
+CURRENT_USER=$(whoami)
+USER_HOME="/home/$CURRENT_USER"
+DUCKDNS_DIR="$USER_HOME/duckdns"
+INSTALL_DIR="$USER_HOME/garage-controller"
 
 # Run setup
 main "$@"
