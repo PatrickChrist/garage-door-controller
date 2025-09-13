@@ -403,9 +403,9 @@ generate_secure_keys() {
     SECRET_KEY=$(openssl rand -base64 32)
     API_KEY=$(openssl rand -base64 24)
     
-    # Update .env file
-    sed -i "s/change-this-secret-key-in-production/${SECRET_KEY}/" "${INSTALL_DIR}/.env"
-    sed -i "s/change-this-api-key-in-production/${API_KEY}/" "${INSTALL_DIR}/.env"
+    # Update .env file (using | as delimiter to avoid conflicts with base64 characters)
+    sed -i "s|change-this-secret-key-in-production|${SECRET_KEY}|" "${INSTALL_DIR}/.env"
+    sed -i "s|change-this-api-key-in-production|${API_KEY}|" "${INSTALL_DIR}/.env"
     
     print_success "Secure keys generated"
 }
