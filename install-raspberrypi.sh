@@ -476,9 +476,18 @@ setup_admin_user() {
     # Activate virtual environment and create admin user
     source venv/bin/activate
     
-    # Get credentials from .env file
-    DEFAULT_ADMIN_USERNAME=$(grep "DEFAULT_ADMIN_USERNAME=" .env | cut -d= -f2 | tr -d '"' || echo "admin")
-    DEFAULT_ADMIN_PASSWORD=$(grep "DEFAULT_ADMIN_PASSWORD=" .env | cut -d= -f2 | tr -d '"' || echo "garage123!")
+    # Get credentials from .env file with better parsing
+    if [ -f ".env" ]; then
+        DEFAULT_ADMIN_USERNAME=$(grep "^DEFAULT_ADMIN_USERNAME=" .env | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || echo "admin")
+        DEFAULT_ADMIN_PASSWORD=$(grep "^DEFAULT_ADMIN_PASSWORD=" .env | cut -d= -f2- | tr -d '"' | tr -d "'" | xargs || echo "garage123!")
+    else
+        DEFAULT_ADMIN_USERNAME="admin"
+        DEFAULT_ADMIN_PASSWORD="garage123!"
+    fi
+    
+    # Fallback to defaults if empty
+    [ -z "$DEFAULT_ADMIN_USERNAME" ] && DEFAULT_ADMIN_USERNAME="admin"
+    [ -z "$DEFAULT_ADMIN_PASSWORD" ] && DEFAULT_ADMIN_PASSWORD="garage123!"
     
     # Create admin user using Python
     python -c "
