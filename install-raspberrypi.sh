@@ -268,8 +268,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=${CURRENT_USER}
+Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=PATH=${INSTALL_DIR}/venv/bin
 ExecStart=${INSTALL_DIR}/venv/bin/python main.py
@@ -306,8 +306,8 @@ Wants=garage-controller.service
 
 [Service]
 Type=simple
-User=pi
-Group=pi
+User=${CURRENT_USER}
+Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=PATH=${INSTALL_DIR}/venv/bin
 ExecStart=${INSTALL_DIR}/venv/bin/python homekit_bridge.py
