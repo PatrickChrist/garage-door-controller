@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garage Door Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+
+        .doors-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .door-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .door-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .door-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .door-status {
+            font-size: 1.2em;
+            margin-bottom: 25px;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-open {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .status-closed {
+            background: #51cf66;
+            color: white;
+        }
+
+        .status-opening {
+            background: #ffd93d;
+            color: #333;
+        }
+
+        .status-closing {
+            background: #74c0fc;
+            color: #333;
+        }
+
+        .status-unknown {
+            background: #adb5bd;
+            color: white;
+        }
+
+        .door-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            width: 100%;
+        }
+
+        .door-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .door-button:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .connection-status {
+            text-align: center;
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .connected {
+            background: #d3f9d8;
+            color: #2b8a3e;
+        }
+
+        .disconnected {
+            background: #ffe0e0;
+            color: #c92a2a;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .doors-container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .door-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏠 Garage Door Controller</h1>
+        
+        <div class="doors-container">
+            <div class="door-card">
+                <div class="door-title">Door 1</div>
+                <div id="status1" class="door-status status-unknown">Unknown</div>
+                <button id="trigger1" class="door-button" onclick="triggerDoor(1)">
+                    Toggle Door 1
+                </button>
+            </div>
+
+            <div class="door-card">
+                <div class="door-title">Door 2</div>
+                <div id="status2" class="door-status status-unknown">Unknown</div>
+                <button id="trigger2" class="door-button" onclick="triggerDoor(2)">
+                    Toggle Door 2
+                </button>
+            </div>
+        </div>
+
+        <div id="connectionStatus" class="connection-status disconnected">
+            Connecting...
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let reconnectInterval = null;
+
+        function updateConnectionStatus(connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            if (connected) {
+                statusEl.textContent = '🟢 Connected';
+                statusEl.className = 'connection-status connected';
+            } else {
+                statusEl.textContent = '🔴 Disconnected';
+                statusEl.className = 'connection-status disconnected';
+            }
+        }
+
+        function updateDoorStatus(doorId, status) {
+            const statusEl = document.getElementById(`status${doorId}`);
+            const buttonEl = document.getElementById(`trigger${doorId}`);
+            
+            statusEl.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            statusEl.className = `door-status status-${status}`;
+            
+            // Disable button during transitions
+            buttonEl.disabled = (status === 'opening' || status === 'closing');
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                updateConnectionStatus(true);
+                
+                if (reconnectInterval) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            };
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'initial_status') {
+                    updateDoorStatus(1, data.doors[1]);
+                    updateDoorStatus(2, data.doors[2]);
+                } else if (data.type === 'status_update') {
+                    updateDoorStatus(data.door_id, data.status);
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus(false);
+                
+                // Auto-reconnect
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 3000);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus(false);
+            };
+        }
+
+        async function triggerDoor(doorId) {
+            try {
+                const response = await fetch(`/api/trigger/${doorId}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                console.log(result.message);
+            } catch (error) {
+                console.error('Error triggering door:', error);
+                alert('Failed to trigger door. Please try again.');
+            }
+        }
+
+        // Initialize connection
+        connectWebSocket();
+
+        // Ping WebSocket to keep connection alive
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
