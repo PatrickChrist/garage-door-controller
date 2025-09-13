@@ -115,6 +115,32 @@ class UserManager:
             }
         return None
     
+    def get_user_by_username(self, username: str) -> Optional[Dict]:
+        """Get user by username"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT id, username, email, is_active, is_admin, created_at, last_login
+            FROM users 
+            WHERE username = ?
+        """, (username,))
+        
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            return {
+                "id": user[0],
+                "username": user[1],
+                "email": user[2],
+                "is_active": user[3],
+                "is_admin": user[4],
+                "created_at": user[5],
+                "last_login": user[6]
+            }
+        return None
+    
     def update_last_login(self, user_id: int):
         """Update user's last login timestamp"""
         conn = sqlite3.connect(self.db_path)
