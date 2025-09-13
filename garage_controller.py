@@ -1,8 +1,25 @@
+import platform
+import os
+
+# GPIO handling for different Pi models
 try:
-    import RPi.GPIO as GPIO
-except ImportError:
+    # Check if we're on a Raspberry Pi 5
+    with open('/proc/device-tree/model', 'r') as f:
+        pi_model = f.read().strip()
+    
+    if 'Raspberry Pi 5' in pi_model:
+        print(f"Detected {pi_model} - using lgpio")
+        import lgpio as GPIO
+        GPIO_LIB = 'lgpio'
+    else:
+        print(f"Detected {pi_model} - using RPi.GPIO")
+        import RPi.GPIO as GPIO
+        GPIO_LIB = 'RPi.GPIO'
+except (ImportError, FileNotFoundError):
     # Use mock GPIO for development on non-Pi systems
+    print("Using mock GPIO for development")
     from mock_rpi import GPIO
+    GPIO_LIB = 'mock'
 import time
 import threading
 from typing import Dict, Callable
@@ -17,6 +34,9 @@ class DoorStatus(Enum):
 
 class GarageDoorController:
     def __init__(self):
+        # Initialize GPIO handle for lgpio
+        self.gpio_handle = None
+        
         # GPIO pin configuration
         self.DOOR1_RELAY = 9     # GPIO 9 for door 1 relay
         self.DOOR2_RELAY = 12    # GPIO 12 for door 2 relay
@@ -42,16 +62,31 @@ class GarageDoorController:
     
     def _setup_gpio(self):
         """Initialize GPIO pins"""
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)
-        
-        # Setup relay pins (output, initially HIGH - relay off)
-        GPIO.setup(self.DOOR1_RELAY, GPIO.OUT, initial=GPIO.HIGH)
-        GPIO.setup(self.DOOR2_RELAY, GPIO.OUT, initial=GPIO.HIGH)
-        
-        # Setup sensor pins (input with pull-up)
-        GPIO.setup(self.DOOR1_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self.DOOR2_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+        if GPIO_LIB == 'lgpio':
+            # Initialize lgpio
+            self.gpio_handle = GPIO.gpiochip_open(0)
+            
+            # Setup relay pins (output, initially HIGH - relay off)
+            GPIO.gpio_claim_output(self.gpio_handle, self.DOOR1_RELAY, 1)
+            GPIO.gpio_claim_output(self.gpio_handle, self.DOOR2_RELAY, 1)
+            
+            # Setup sensor pins (input with pull-up)
+            GPIO.gpio_claim_input(self.gpio_handle, self.DOOR1_SENSOR, GPIO.SET_PULL_UP)
+            if self.DOOR2_SENSOR != self.DOOR1_SENSOR:  # Only claim if different pin
+                GPIO.gpio_claim_input(self.gpio_handle, self.DOOR2_SENSOR, GPIO.SET_PULL_UP)
+                
+        else:
+            # Traditional RPi.GPIO setup
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            
+            # Setup relay pins (output, initially HIGH - relay off)
+            GPIO.setup(self.DOOR1_RELAY, GPIO.OUT, initial=GPIO.HIGH)
+            GPIO.setup(self.DOOR2_RELAY, GPIO.OUT, initial=GPIO.HIGH)
+            
+            # Setup sensor pins (input with pull-up)
+            GPIO.setup(self.DOOR1_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.setup(self.DOOR2_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # Initialize door states
         self._update_door_status(1)
@@ -65,10 +100,24 @@ class GarageDoorController:
         """Get relay pin for door"""
         return self.DOOR1_RELAY if door_id == 1 else self.DOOR2_RELAY
     
+    def _gpio_read(self, pin: int) -> bool:
+        """Read GPIO pin value"""
+        if GPIO_LIB == 'lgpio':
+            return GPIO.gpio_read(self.gpio_handle, pin) == 1
+        else:
+            return GPIO.input(pin) == GPIO.HIGH
+    
+    def _gpio_write(self, pin: int, value: bool):
+        """Write GPIO pin value"""
+        if GPIO_LIB == 'lgpio':
+            GPIO.gpio_write(self.gpio_handle, pin, 1 if value else 0)
+        else:
+            GPIO.output(pin, GPIO.HIGH if value else GPIO.LOW)
+    
     def _read_sensor(self, door_id: int) -> bool:
         """Read door sensor (True = open, False = closed)"""
         sensor_pin = self._get_sensor_pin(door_id)
-        return GPIO.input(sensor_pin) == GPIO.HIGH
+        return self._gpio_read(sensor_pin)
     
     def _update_door_status(self, door_id: int):
         """Update door status based on sensor reading"""
@@ -105,9 +154,9 @@ class GarageDoorController:
             self.status_callbacks[door_id](door_id, self.door_states[door_id])
         
         # Trigger relay (LOW activates relay)
-        GPIO.output(relay_pin, GPIO.LOW)
+        self._gpio_write(relay_pin, False)  # LOW to activate relay
         time.sleep(duration)
-        GPIO.output(relay_pin, GPIO.HIGH)
+        self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
         
         # Wait a moment for door to start moving, then monitor for final state
         threading.Timer(2.0, self._update_door_status, args=[door_id]).start()
@@ -134,7 +183,13 @@ class GarageDoorController:
         self.monitoring = False
         if self.monitor_thread.is_alive():
             self.monitor_thread.join(timeout=1.0)
-        GPIO.cleanup()
+        
+        if GPIO_LIB == 'lgpio':
+            if self.gpio_handle is not None:
+                GPIO.gpiochip_close(self.gpio_handle)
+                self.gpio_handle = None
+        else:
+            GPIO.cleanup()
 
 # Global controller instance
 garage_controller = None
