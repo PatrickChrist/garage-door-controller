@@ -124,9 +124,7 @@ def create_user_token(user: dict) -> str:
     }
     return create_access_token(token_data)
 
-async def get_current_web_user(request: Request, 
-                              credentials: HTTPAuthorizationCredentials = Security(security),
-                              basic_credentials: HTTPBasicCredentials = Security(basic_auth)):
+async def get_current_web_user(request: Request):
     """Get current authenticated user for web interface"""
     if not ENABLE_AUTH:
         return {"user": "anonymous", "authenticated": False}
@@ -140,30 +138,37 @@ async def get_current_web_user(request: Request,
             if user and user["is_active"]:
                 return {"user": user["username"], "authenticated": True, "auth_type": "session", "user_data": user}
     
-    # Check Bearer token
-    if credentials and credentials.credentials:
+    # Check Bearer token from Authorization header
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+        
         # Check API key
-        if verify_api_key(credentials.credentials):
+        if verify_api_key(token):
             return {"user": "api_user", "authenticated": True, "auth_type": "api_key"}
         
         # Check JWT token
-        payload = verify_token(credentials.credentials)
+        payload = verify_token(token)
         if payload:
             user = user_manager.get_user_by_id(payload.get("user_id"))
             if user and user["is_active"]:
                 return {"user": user["username"], "authenticated": True, "auth_type": "jwt", "user_data": user}
     
-    # Check Basic auth
-    if basic_credentials:
-        user = authenticate_user(basic_credentials.username, basic_credentials.password)
-        if user:
-            return {"user": user["username"], "authenticated": True, "auth_type": "basic", "user_data": user}
+    # Check Basic auth from Authorization header
+    if authorization.startswith("Basic "):
+        import base64
+        try:
+            encoded_credentials = authorization.split(" ", 1)[1]
+            decoded_credentials = base64.b64decode(encoded_credentials).decode("utf-8")
+            username, password = decoded_credentials.split(":", 1)
+            user = authenticate_user(username, password)
+            if user:
+                return {"user": user["username"], "authenticated": True, "auth_type": "basic", "user_data": user}
+        except (ValueError, UnicodeDecodeError):
+            pass
     
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required",
-        headers={"WWW-Authenticate": "Bearer"}
-    )
+    # Return unauthenticated user for web interface (will redirect to login)
+    return {"user": "anonymous", "authenticated": False}
 
 async def get_optional_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Get user if authenticated, but don't require authentication"""
