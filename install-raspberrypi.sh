@@ -272,7 +272,7 @@ User=${CURRENT_USER}
 Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=PATH=${INSTALL_DIR}/venv/bin
-ExecStart=${INSTALL_DIR}/venv/bin/python main.py
+ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/main.py
 Restart=always
 RestartSec=3
 StandardOutput=journal
@@ -292,6 +292,17 @@ EOF
     sudo systemctl daemon-reload
     sudo systemctl enable ${SERVICE_NAME}
     
+    # Verify the service files exist
+    if [ ! -f "${INSTALL_DIR}/main.py" ]; then
+        print_error "main.py not found in ${INSTALL_DIR}"
+        return 1
+    fi
+    
+    if [ ! -f "${INSTALL_DIR}/venv/bin/python" ]; then
+        print_error "Python virtual environment not found at ${INSTALL_DIR}/venv/bin/python"
+        return 1
+    fi
+    
     print_success "Systemd service configured"
 }
 
@@ -310,7 +321,7 @@ User=${CURRENT_USER}
 Group=${CURRENT_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment=PATH=${INSTALL_DIR}/venv/bin
-ExecStart=${INSTALL_DIR}/venv/bin/python homekit_bridge.py
+ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/homekit_bridge.py
 Restart=always
 RestartSec=3
 StandardOutput=journal
