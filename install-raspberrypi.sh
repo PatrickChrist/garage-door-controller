@@ -122,6 +122,53 @@ clone_repository() {
     if git clone "$REPO_URL" "$INSTALL_DIR"; then
         print_success "Repository cloned successfully"
         cd "$INSTALL_DIR"
+        
+        # Create .env file from template if it exists, otherwise create with defaults
+        if [ -f ".env.example" ]; then
+            cp .env.example .env
+            print_status "Created .env from template"
+        else
+            # Create .env file with secure defaults
+            cat > .env << 'EOF'
+# Garage Door Controller Configuration
+# API Security - CHANGE THESE IN PRODUCTION!
+SECRET_KEY=change-this-secret-key-in-production
+API_KEY=change-this-api-key-in-production
+
+# Default Admin User (for initial setup)
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=garage123!
+
+# GPIO Configuration
+DOOR1_RELAY_PIN=9
+DOOR2_RELAY_PIN=12
+DOOR1_SENSOR_PIN=4
+DOOR2_SENSOR_PIN=4
+
+# Server Configuration
+HOST=0.0.0.0
+PORT=8000
+DEBUG=false
+
+# Security Settings
+ENABLE_AUTH=true
+TOKEN_EXPIRE_MINUTES=60
+
+# DuckDNS Configuration (optional)
+DUCKDNS_ENABLED=false
+DUCKDNS_DOMAIN=
+DUCKDNS_TOKEN=
+DUCKDNS_URL=
+EXTERNAL_ACCESS_ENABLED=false
+EXTERNAL_URL=
+
+# SSL Configuration (optional)
+SSL_ENABLED=false
+SSL_CERT_PATH=/etc/letsencrypt/live/
+SSL_KEY_PATH=/etc/letsencrypt/live/
+EOF
+            print_status "Created .env with default configuration"
+        fi
     else
         print_error "Failed to clone repository. Falling back to manual setup..."
         create_application_files_fallback
