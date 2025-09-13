@@ -33,10 +33,10 @@ A Raspberry Pi-based garage door controller with web interface, REST API, WebSoc
 ### Automated Installation (Recommended)
 ```bash
 # Download and run the installation script
-curl -sSL https://raw.githubusercontent.com/patrickchrist/garage-door-controller/main/install-raspberrypi.sh | bash
+curl -sSL https://raw.githubusercontent.com/PatrickChrist/garage-door-controller/main/install-raspberrypi.sh | bash
 
 # Or download first, then run
-wget https://raw.githubusercontent.com/patrickchrist/garage-door-controller/main/install-raspberrypi.sh
+wget https://raw.githubusercontent.com/PatrickChrist/garage-door-controller/main/install-raspberrypi.sh
 chmod +x install-raspberrypi.sh
 ./install-raspberrypi.sh
 ```
@@ -52,7 +52,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install python3 python3-pip python3-venv git -y
 
 # Clone repository
-git clone https://github.com/patrickchrist/garage-door-controller.git garage-controller
+git clone https://github.com/PatrickChrist/garage-door-controller.git garage-controller
 cd garage-controller
 ```
 

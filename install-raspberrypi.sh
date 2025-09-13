@@ -98,8 +98,8 @@ setup_user_permissions() {
 clone_repository() {
     print_status "Cloning garage door controller repository..."
     
-    # Repository URL - update this with your actual GitHub username
-    REPO_URL="https://github.com/patrickchrist/garage-door-controller.git"
+    # Repository URL
+    REPO_URL="https://github.com/PatrickChrist/garage-door-controller.git"
     
     # Remove existing installation if it exists
     if [ -d "$INSTALL_DIR" ]; then
