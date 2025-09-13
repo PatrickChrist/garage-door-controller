@@ -468,6 +468,58 @@ generate_secure_keys() {
     print_success "Secure keys generated"
 }
 
+setup_admin_user() {
+    print_status "Creating default admin user..."
+    
+    cd "$INSTALL_DIR"
+    
+    # Activate virtual environment and create admin user
+    source venv/bin/activate
+    
+    # Get credentials from .env file
+    DEFAULT_ADMIN_USERNAME=$(grep "DEFAULT_ADMIN_USERNAME=" .env | cut -d= -f2 | tr -d '"' || echo "admin")
+    DEFAULT_ADMIN_PASSWORD=$(grep "DEFAULT_ADMIN_PASSWORD=" .env | cut -d= -f2 | tr -d '"' || echo "garage123!")
+    
+    # Create admin user using Python
+    python -c "
+import sys
+sys.path.append('${INSTALL_DIR}')
+from users import user_manager
+
+username = '${DEFAULT_ADMIN_USERNAME}'
+password = '${DEFAULT_ADMIN_PASSWORD}'
+
+try:
+    if user_manager.create_user(username, password, is_admin=True):
+        print(f'✓ Admin user \"{username}\" created successfully')
+    else:
+        # User might already exist, try to update password
+        user = user_manager.get_user_by_username(username)
+        if user:
+            print(f'✓ Admin user \"{username}\" already exists')
+        else:
+            print(f'✗ Failed to create admin user \"{username}\"')
+            sys.exit(1)
+except Exception as e:
+    print(f'✗ Error creating admin user: {e}')
+    sys.exit(1)
+"
+    
+    if [ $? -eq 0 ]; then
+        print_success "Admin user configured"
+        echo
+        echo "🔑 Default Login Credentials:"
+        echo "   Username: ${DEFAULT_ADMIN_USERNAME}"
+        echo "   Password: ${DEFAULT_ADMIN_PASSWORD}"
+        echo
+        echo "⚠️  IMPORTANT: Change these credentials after first login!"
+        echo
+    else
+        print_error "Failed to create admin user"
+        return 1
+    fi
+}
+
 setup_maintenance_cron_jobs() {
     print_status "Setting up maintenance cron jobs..."
     
@@ -719,6 +771,7 @@ main() {
     setup_firewall
     setup_fail2ban
     generate_secure_keys
+    setup_admin_user
     setup_maintenance_cron_jobs
     test_installation
     
