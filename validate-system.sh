@@ -189,7 +189,7 @@ check_gpio_pins() {
     done
     
     if [ $PIN_CONFLICTS -eq 0 ]; then
-        print_pass "All required GPIO pins (18, 19, 23, 24) are available"
+        print_pass "All required GPIO pins (9, 12, 4) are available"
     fi
 }
 

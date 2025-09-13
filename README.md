@@ -23,10 +23,9 @@ A Raspberry Pi-based garage door controller with web interface, REST API, WebSoc
 - Power supply
 
 ### GPIO Pinout (default)
-- Door 1 Relay: GPIO 18
-- Door 2 Relay: GPIO 19
-- Door 1 Sensor: GPIO 23
-- Door 2 Sensor: GPIO 24
+- Door 1 Relay: GPIO 9
+- Door 2 Relay: GPIO 12
+- Door Sensor: GPIO 4 (shared for both doors)
 
 ## Quick Installation
 
@@ -78,11 +77,12 @@ nano .env
 #### 4. Hardware Connections
 
 #### Relay Modules
-- Connect relay modules to 5V, GND, and GPIO pins 18 & 19
+- Connect relay modules to 5V, GND, and GPIO pins 9 & 12
 - Connect relay outputs to garage door opener button terminals
 
-#### Door Sensors
-- Connect reed switches between GPIO pins 23 & 24 and GND
+#### Door Sensor
+- Connect door sensor between GPIO pin 4 and GND
+- Single sensor shared for both doors
 - Use internal pull-up resistors (configured in software)
 
 ## Configuration

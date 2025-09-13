@@ -147,10 +147,10 @@ DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_PASSWORD=garage123!
 
 # GPIO Configuration
-DOOR1_RELAY_PIN=18
-DOOR2_RELAY_PIN=19
-DOOR1_SENSOR_PIN=23
-DOOR2_SENSOR_PIN=24
+DOOR1_RELAY_PIN=9
+DOOR2_RELAY_PIN=12
+DOOR1_SENSOR_PIN=4
+DOOR2_SENSOR_PIN=4
 
 # Server Configuration
 HOST=0.0.0.0
@@ -598,10 +598,9 @@ display_completion_info() {
     echo "  • Change default credentials in ${INSTALL_DIR}/.env"
     echo
     echo "⚡ Hardware Setup:"
-    echo "  • Connect Door 1 Relay to GPIO 18"
-    echo "  • Connect Door 2 Relay to GPIO 19"
-    echo "  • Connect Door 1 Sensor to GPIO 23"
-    echo "  • Connect Door 2 Sensor to GPIO 24"
+    echo "  • Connect Door 1 Relay to GPIO 9"
+    echo "  • Connect Door 2 Relay to GPIO 12"
+    echo "  • Connect Door Sensor to GPIO 4 (shared)"
     echo
     echo "🌐 Remote Access Setup:"
     echo "  • For external access, run: ./duckdns-setup.sh"

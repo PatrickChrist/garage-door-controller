@@ -41,30 +41,29 @@ Complete hardware setup instructions for the Garage Door Controller.
     3.3V  1 ┃ 2   5V
    GPIO2  3 ┃ 4   5V
    GPIO3  5 ┃ 6   GND
-   GPIO4  7 ┃ 8   GPIO14
+   GPIO4  7 ┃ 8   GPIO14  ← Door Sensor (shared)
      GND  9 ┃ 10  GPIO15
-  GPIO17 11 ┃ 12  GPIO18  ← Door 1 Relay
+  GPIO17 11 ┃ 12  GPIO18
   GPIO27 13 ┃ 14  GND
-  GPIO22 15 ┃ 16  GPIO23  ← Door 1 Sensor
-     3.3V 17 ┃ 18  GPIO24  ← Door 2 Sensor
+  GPIO22 15 ┃ 16  GPIO23
+     3.3V 17 ┃ 18  GPIO24
   GPIO10 19 ┃ 20  GND
-   GPIO9 21 ┃ 22  GPIO25
+   GPIO9 21 ┃ 22  GPIO25  ← Door 1 Relay
   GPIO11 23 ┃ 24  GPIO8
      GND 25 ┃ 26  GPIO7
    GPIO0 27 ┃ 28  GPIO1
    GPIO5 29 ┃ 30  GND
-   GPIO6 31 ┃ 32  GPIO12
+   GPIO6 31 ┃ 32  GPIO12  ← Door 2 Relay
   GPIO13 33 ┃ 34  GND
-  GPIO19 35 ┃ 36  GPIO16  ← Door 2 Relay (Alternative)
+  GPIO19 35 ┃ 36  GPIO16
   GPIO26 37 ┃ 38  GPIO20
      GND 39 ┃ 40  GPIO21
 ```
 
 ### Default Pin Assignment
-- **GPIO 18**: Door 1 Relay Control
-- **GPIO 19**: Door 2 Relay Control  
-- **GPIO 23**: Door 1 Position Sensor
-- **GPIO 24**: Door 2 Position Sensor
+- **GPIO 9**: Door 1 Relay Control
+- **GPIO 12**: Door 2 Relay Control  
+- **GPIO 4**: Door Position Sensor (shared for both doors)
 
 ## Component Wiring
 
@@ -76,8 +75,8 @@ The relay module controls the garage door openers by simulating button presses.
 ```
 VCC → 5V (Pin 2 or 4)
 GND → GND (Pin 6, 9, 14, 20, 25, 30, 34, or 39)
-IN1 → GPIO 18 (Pin 12) - Door 1
-IN2 → GPIO 19 (Pin 35) - Door 2
+IN1 → GPIO 9 (Pin 21) - Door 1
+IN2 → GPIO 12 (Pin 32) - Door 2
 ```
 
 **Relay Module → Garage Door Opener:**
@@ -90,16 +89,14 @@ Door 2: COM2 and NO2 → Garage Door 2 button terminals
 
 Reed switches detect door position (open/closed).
 
-**Door 1 Sensor:**
+**Door Sensor (Shared):**
 ```
-Reed Switch Terminal 1 → GPIO 23 (Pin 16)
-Reed Switch Terminal 2 → GND (any ground pin)
+Door Sensor Terminal 1 → GPIO 4 (Pin 7)
+Door Sensor Terminal 2 → GND (any ground pin)
 ```
 
-**Door 2 Sensor:**
-```
-Reed Switch Terminal 1 → GPIO 24 (Pin 18)  
-Reed Switch Terminal 2 → GND (any ground pin)
+**Note:** This configuration uses a single sensor shared between both doors.
+The sensor detects when any door is in motion or position change.
 ```
 
 ### 3. Power Connections
@@ -135,7 +132,7 @@ Relay Module: Powered from Pi's 5V rail
 └─────────────┘
       ↕
 ┌─────────────┐  ← Door Frame
-│ [Reed SW]   │  ← Wired to GPIO 23/24
+│ [Door Sensor] │  ← Wired to GPIO 4
 └─────────────┘
 ```
 
@@ -144,7 +141,7 @@ Relay Module: Powered from Pi's 5V rail
     Track
 ═══════════════
     ↕  [Magnet on door]
-[Reed SW]  ← Wired to GPIO 23/24
+[Door Sensor]  ← Wired to GPIO 4
 ```
 
 **Installation Steps:**
@@ -207,8 +204,8 @@ Garage Door Opener Motor Unit
    ││      ││      ││   ││
    ││      ││      ││   └┴─ To Door 2 Opener
    ││      ││      └┴─ To Door 1 Opener  
-   ││      └┴─ GPIO 19 (Door 2)
-   └┴─ GPIO 18 (Door 1)
+   ││      └┴─ GPIO 12 (Door 2)
+   └┴─ GPIO 9 (Door 1)
 ```
 
 ## Testing and Validation

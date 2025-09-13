@@ -18,10 +18,10 @@ class DoorStatus(Enum):
 class GarageDoorController:
     def __init__(self):
         # GPIO pin configuration
-        self.DOOR1_RELAY = 18    # GPIO 18 for door 1 relay
-        self.DOOR2_RELAY = 19    # GPIO 19 for door 2 relay
-        self.DOOR1_SENSOR = 23   # GPIO 23 for door 1 sensor (LOW = closed)
-        self.DOOR2_SENSOR = 24   # GPIO 24 for door 2 sensor (LOW = closed)
+        self.DOOR1_RELAY = 9     # GPIO 9 for door 1 relay
+        self.DOOR2_RELAY = 12    # GPIO 12 for door 2 relay
+        self.DOOR1_SENSOR = 4    # GPIO 4 for door 1 sensor (LOW = closed)
+        self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (LOW = closed) - shared sensor
         
         # Door states
         self.door_states = {
