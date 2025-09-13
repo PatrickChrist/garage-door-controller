@@ -142,6 +142,10 @@ EOF
 SECRET_KEY=change-this-secret-key-in-production
 API_KEY=change-this-api-key-in-production
 
+# Default Admin User (for initial setup)
+DEFAULT_ADMIN_USERNAME=admin
+DEFAULT_ADMIN_PASSWORD=garage123!
+
 # GPIO Configuration
 DOOR1_RELAY_PIN=18
 DOOR2_RELAY_PIN=19
@@ -156,6 +160,25 @@ DEBUG=false
 # Security Settings
 ENABLE_AUTH=true
 TOKEN_EXPIRE_MINUTES=60
+
+# DuckDNS Configuration
+DUCKDNS_DOMAIN=
+DUCKDNS_TOKEN=
+DUCKDNS_ENABLED=false
+
+# SSL Configuration
+SSL_ENABLED=false
+SSL_CERT_PATH=/etc/letsencrypt/live/
+SSL_KEY_PATH=/etc/letsencrypt/live/
+
+# Network Configuration
+LOCAL_NETWORK=192.168.1.0/24
+EXTERNAL_ACCESS_ENABLED=false
+
+# Monitoring and Maintenance
+UPDATE_CHECK_ENABLED=true
+BACKUP_ENABLED=true
+BACKUP_RETENTION_DAYS=30
 EOF
 
     print_success "Application files created"
@@ -212,6 +235,44 @@ EOF
     sudo systemctl enable ${SERVICE_NAME}
     
     print_success "Systemd service configured"
+}
+
+setup_homekit_service() {
+    print_status "Setting up HomeKit bridge service..."
+    
+    sudo tee /etc/systemd/system/garage-homekit.service > /dev/null << EOF
+[Unit]
+Description=Garage Door HomeKit Bridge
+After=network.target garage-controller.service
+Wants=garage-controller.service
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=${INSTALL_DIR}
+Environment=PATH=${INSTALL_DIR}/venv/bin
+ExecStart=${INSTALL_DIR}/venv/bin/python homekit_bridge.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=${INSTALL_DIR}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable garage-homekit
+    
+    print_success "HomeKit bridge service configured"
 }
 
 setup_nginx() {
@@ -338,6 +399,152 @@ generate_secure_keys() {
     print_success "Secure keys generated"
 }
 
+setup_maintenance_cron_jobs() {
+    print_status "Setting up maintenance cron jobs..."
+    
+    # Create maintenance script
+    cat > "${INSTALL_DIR}/maintenance.sh" << 'EOF'
+#!/bin/bash
+# Garage Door Controller Maintenance Script
+
+LOG_FILE="/var/log/garage-controller-maintenance.log"
+INSTALL_DIR="/home/pi/garage-controller"
+
+# Function to log with timestamp
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG_FILE"
+}
+
+# System health check
+health_check() {
+    log_message "Starting health check"
+    
+    # Check service status
+    if ! systemctl is-active --quiet garage-controller; then
+        log_message "WARNING: garage-controller service is not running"
+        systemctl restart garage-controller
+        log_message "Attempted to restart garage-controller service"
+    fi
+    
+    # Check disk space
+    DISK_USAGE=$(df / | awk 'NR==2 {print substr($5, 1, length($5)-1)}')
+    if [ "$DISK_USAGE" -gt 85 ]; then
+        log_message "WARNING: Disk usage is at ${DISK_USAGE}%"
+    fi
+    
+    # Check memory usage
+    MEM_USAGE=$(free | awk 'FNR==2{printf "%.0f", $3/($3+$4)*100}')
+    if [ "$MEM_USAGE" -gt 85 ]; then
+        log_message "WARNING: Memory usage is at ${MEM_USAGE}%"
+    fi
+    
+    log_message "Health check completed"
+}
+
+# Backup database and configuration
+backup_data() {
+    log_message "Starting backup"
+    
+    BACKUP_DIR="${INSTALL_DIR}/backups"
+    mkdir -p "$BACKUP_DIR"
+    
+    # Create backup with timestamp
+    TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
+    BACKUP_FILE="${BACKUP_DIR}/garage_backup_${TIMESTAMP}.tar.gz"
+    
+    # Backup database and config files
+    tar -czf "$BACKUP_FILE" -C "$INSTALL_DIR" \
+        users.db .env *.py static/ 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        log_message "Backup created: $BACKUP_FILE"
+        
+        # Clean old backups (keep last 30 days)
+        find "$BACKUP_DIR" -name "garage_backup_*.tar.gz" -mtime +30 -delete
+        log_message "Old backups cleaned"
+    else
+        log_message "ERROR: Backup failed"
+    fi
+}
+
+# Update system packages
+update_system() {
+    log_message "Starting system update check"
+    
+    # Check for updates
+    apt list --upgradable 2>/dev/null | grep -q upgradable
+    if [ $? -eq 0 ]; then
+        log_message "Updates available, installing security updates"
+        apt update -qq
+        apt upgrade -y -qq --only-upgrade $(apt list --upgradable 2>/dev/null | grep -i security | awk -F'/' '{print $1}')
+        log_message "Security updates installed"
+    else
+        log_message "No updates available"
+    fi
+}
+
+# Log rotation
+rotate_logs() {
+    # Rotate maintenance log if larger than 10MB
+    if [ -f "$LOG_FILE" ] && [ $(stat -c%s "$LOG_FILE") -gt 10485760 ]; then
+        mv "$LOG_FILE" "${LOG_FILE}.old"
+        touch "$LOG_FILE"
+        log_message "Log file rotated"
+    fi
+}
+
+# Main execution based on argument
+case "$1" in
+    "health")
+        health_check
+        ;;
+    "backup")
+        backup_data
+        ;;
+    "update")
+        update_system
+        ;;
+    "all")
+        health_check
+        backup_data
+        update_system
+        rotate_logs
+        ;;
+    *)
+        echo "Usage: $0 {health|backup|update|all}"
+        exit 1
+        ;;
+esac
+EOF
+
+    chmod +x "${INSTALL_DIR}/maintenance.sh"
+    
+    # Setup cron jobs for pi user
+    print_status "Installing cron jobs..."
+    
+    # Remove existing garage-related cron jobs to avoid duplicates
+    crontab -l 2>/dev/null | grep -v "garage" | grep -v "maintenance.sh" | crontab -
+    
+    # Add maintenance cron jobs
+    (crontab -l 2>/dev/null; cat << 'CRON_EOF'
+# Garage Door Controller Maintenance
+# Health check every 15 minutes
+*/15 * * * * /home/pi/garage-controller/maintenance.sh health >/dev/null 2>&1
+
+# Daily backup at 2 AM
+0 2 * * * /home/pi/garage-controller/maintenance.sh backup >/dev/null 2>&1
+
+# Weekly system update check on Sundays at 3 AM
+0 3 * * 0 /home/pi/garage-controller/maintenance.sh update >/dev/null 2>&1
+
+# Monthly log rotation on 1st day at 4 AM
+0 4 1 * * /home/pi/garage-controller/maintenance.sh all >/dev/null 2>&1
+CRON_EOF
+    ) | crontab -
+    
+    print_success "Maintenance cron jobs configured"
+}
+
 test_installation() {
     print_status "Testing installation..."
     
@@ -396,7 +603,17 @@ display_completion_info() {
     echo "  • Connect Door 1 Sensor to GPIO 23"
     echo "  • Connect Door 2 Sensor to GPIO 24"
     echo
-    echo "📖 Documentation: ${INSTALL_DIR}/README.md"
+    echo "🌐 Remote Access Setup:"
+    echo "  • For external access, run: ./duckdns-setup.sh"
+    echo "  • This enables access from anywhere via DuckDNS"
+    echo "  • Includes SSL certificates and security hardening"
+    echo "  • DuckDNS credentials can be configured in .env file"
+    echo
+    echo "📖 Documentation:"
+    echo "  • README.md - Main setup guide"
+    echo "  • HARDWARE_SETUP.md - Hardware wiring guide"
+    echo "  • REMOTE_ACCESS.md - DuckDNS and external access"
+    echo "  • APPLE_INTEGRATION.md - iOS, Apple Watch, HomeKit"
     echo
     print_warning "Please reboot your Raspberry Pi to ensure all changes take effect:"
     echo "  sudo reboot"
@@ -420,10 +637,12 @@ main() {
     clone_repository
     setup_python_environment
     setup_systemd_service
+    setup_homekit_service
     setup_nginx
     setup_firewall
     setup_fail2ban
     generate_secure_keys
+    setup_maintenance_cron_jobs
     test_installation
     
     display_completion_info

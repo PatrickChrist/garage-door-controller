@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import HTTPException, Security, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import HTTPException, Security, status, Request, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials, HTTPBasic, HTTPBasicCredentials
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import os
 from dotenv import load_dotenv
+from users import user_manager
 
 load_dotenv()
 
@@ -18,6 +19,7 @@ ENABLE_AUTH = os.getenv("ENABLE_AUTH", "true").lower() == "true"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+basic_auth = HTTPBasic(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
@@ -50,6 +52,27 @@ def verify_api_key(api_key: str) -> bool:
     """Verify API key"""
     return api_key == API_KEY
 
+async def require_admin(current_user: dict = Depends(get_current_user)):
+    """Require admin privileges"""
+    if not current_user["authenticated"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    
+    # API key users have admin access
+    if current_user["auth_type"] == "api_key":
+        return current_user
+    
+    # Check if user is admin
+    if "user_data" in current_user and not current_user["user_data"]["is_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    
+    return current_user
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Get current authenticated user"""
     if not ENABLE_AUTH:
@@ -75,7 +98,72 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    return {"user": payload.get("sub"), "authenticated": True, "auth_type": "jwt"}
+    user = user_manager.get_user_by_id(payload.get("user_id"))
+    if not user or not user["is_active"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return {"user": user["username"], "authenticated": True, "auth_type": "jwt", "user_data": user}
+
+def authenticate_user(username: str, password: str) -> Optional[dict]:
+    """Authenticate user with username and password"""
+    user = user_manager.verify_user(username, password)
+    if user:
+        user_manager.update_last_login(user["id"])
+    return user
+
+def create_user_token(user: dict) -> str:
+    """Create JWT token for authenticated user"""
+    token_data = {
+        "sub": user["username"],
+        "user_id": user["id"],
+        "is_admin": user["is_admin"]
+    }
+    return create_access_token(token_data)
+
+async def get_current_web_user(request: Request, 
+                              credentials: HTTPAuthorizationCredentials = Security(security),
+                              basic_credentials: HTTPBasicCredentials = Security(basic_auth)):
+    """Get current authenticated user for web interface"""
+    if not ENABLE_AUTH:
+        return {"user": "anonymous", "authenticated": False}
+    
+    # Check session cookie first
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        payload = verify_token(session_token)
+        if payload:
+            user = user_manager.get_user_by_id(payload.get("user_id"))
+            if user and user["is_active"]:
+                return {"user": user["username"], "authenticated": True, "auth_type": "session", "user_data": user}
+    
+    # Check Bearer token
+    if credentials and credentials.credentials:
+        # Check API key
+        if verify_api_key(credentials.credentials):
+            return {"user": "api_user", "authenticated": True, "auth_type": "api_key"}
+        
+        # Check JWT token
+        payload = verify_token(credentials.credentials)
+        if payload:
+            user = user_manager.get_user_by_id(payload.get("user_id"))
+            if user and user["is_active"]:
+                return {"user": user["username"], "authenticated": True, "auth_type": "jwt", "user_data": user}
+    
+    # Check Basic auth
+    if basic_credentials:
+        user = authenticate_user(basic_credentials.username, basic_credentials.password)
+        if user:
+            return {"user": user["username"], "authenticated": True, "auth_type": "basic", "user_data": user}
+    
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": "Bearer"}
+    )
 
 async def get_optional_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Get user if authenticated, but don't require authentication"""
@@ -92,6 +180,8 @@ async def get_optional_user(credentials: HTTPAuthorizationCredentials = Security
     # Check JWT token
     payload = verify_token(credentials.credentials)
     if payload is not None:
-        return {"user": payload.get("sub"), "authenticated": True, "auth_type": "jwt"}
+        user = user_manager.get_user_by_id(payload.get("user_id"))
+        if user and user["is_active"]:
+            return {"user": user["username"], "authenticated": True, "auth_type": "jwt", "user_data": user}
     
     return {"user": "anonymous", "authenticated": False}

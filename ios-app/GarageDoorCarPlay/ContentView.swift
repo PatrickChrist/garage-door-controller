@@ -55,7 +55,16 @@ struct ContentView: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .navigationBarHidden(true)
+            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("Garage Control")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    NavigationLink(destination: SettingsView()) {
+                        Image(systemName: "gear")
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
         }
         .onAppear {
             garageController.connect()

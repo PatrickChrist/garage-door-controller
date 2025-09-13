@@ -144,6 +144,36 @@
             color: #c92a2a;
         }
 
+        .auth-header {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .logout-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #ff5252;
+            transform: scale(1.05);
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -165,6 +195,11 @@
     </style>
 </head>
 <body>
+    <div class="auth-header" id="authHeader" style="display: none;">
+        <span class="user-info" id="userInfo"></span>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+    
     <div class="container">
         <h1>🏠 Garage Door Controller</h1>
         
@@ -260,11 +295,60 @@
             };
         }
 
-        async function triggerDoor(doorId) {
+        // Updated triggerDoor to use auth version
+        function triggerDoor(doorId) {
+            triggerDoorWithAuth(doorId);
+        }
+
+        // Check authentication status
+        async function checkAuth() {
+            try {
+                const response = await fetch('/auth/me');
+                if (response.ok) {
+                    const user = await response.json();
+                    if (user.authenticated) {
+                        document.getElementById('userInfo').textContent = `Welcome, ${user.user}`;
+                        document.getElementById('authHeader').style.display = 'flex';
+                    } else {
+                        // Redirect to login if not authenticated
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                } else if (response.status === 401) {
+                    // Redirect to login if unauthorized
+                    window.location.href = '/login.html';
+                    return;
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                // Continue without auth info but don't redirect
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/auth/logout', { method: 'POST' });
+                document.cookie = 'session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Force logout by clearing cookie and redirecting
+                document.cookie = 'session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+                window.location.href = '/login.html';
+            }
+        }
+
+        async function triggerDoorWithAuth(doorId) {
             try {
                 const response = await fetch(`/api/trigger/${doorId}`, {
-                    method: 'POST'
+                    method: 'POST',
+                    credentials: 'include'
                 });
+                
+                if (response.status === 401) {
+                    window.location.href = '/login.html';
+                    return;
+                }
                 
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -278,8 +362,10 @@
             }
         }
 
-        // Initialize connection
-        connectWebSocket();
+        // Initialize authentication and connection
+        checkAuth().then(() => {
+            connectWebSocket();
+        });
 
         // Ping WebSocket to keep connection alive
         setInterval(() => {
