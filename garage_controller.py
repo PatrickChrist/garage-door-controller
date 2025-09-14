@@ -138,7 +138,7 @@ class GarageDoorController:
             self._update_door_status(2)
             time.sleep(0.5)  # Check every 500ms
     
-    def trigger_door(self, door_id: int, duration: float = 0.5):
+    def trigger_door(self, door_id: int, duration: float = 1.5):
         """Trigger garage door opener (simulate button press)"""
         if door_id not in [1, 2]:
             raise ValueError("Door ID must be 1 or 2")
