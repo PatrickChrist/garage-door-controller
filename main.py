@@ -68,6 +68,9 @@ controller = get_garage_controller()
 # Register status change callbacks
 def door_status_changed(door_id: int, status: DoorStatus):
     """Callback for door status changes"""
+    # Log status changes
+    user_manager.log_door_activity(door_id, f"status_changed_to_{status.value}")
+    
     message = json.dumps({
         "type": "status_update",
         "door_id": door_id,
@@ -246,16 +249,34 @@ async def delete_user(user_id: int, current_user: dict = Depends(require_admin))
     
     return {"message": "User deleted successfully"}
 
-@app.post("/api/trigger/{door_id}")
-async def trigger_door(door_id: int, request: Request):
-    """Trigger garage door opener"""
+@app.get("/api/activity")
+async def get_door_activity(request: Request, limit: int = 50):
+    """Get door activity log"""
     if ENABLE_AUTH:
         current_user = await get_current_web_user(request)
         if not current_user["authenticated"]:
             raise HTTPException(status_code=401, detail="Authentication required")
     
+    activities = user_manager.get_door_activity_log(limit)
+    return {"activities": activities}
+
+@app.post("/api/trigger/{door_id}")
+async def trigger_door(door_id: int, request: Request):
+    """Trigger garage door opener"""
+    current_user_info = None
+    if ENABLE_AUTH:
+        current_user_info = await get_current_web_user(request)
+        if not current_user_info["authenticated"]:
+            raise HTTPException(status_code=401, detail="Authentication required")
+    
     try:
         controller.trigger_door(door_id)
+        
+        # Log the door activity
+        user_id = current_user_info["user_data"]["id"] if current_user_info and current_user_info.get("user_data") else None
+        user_name = current_user_info["user_data"]["username"] if current_user_info and current_user_info.get("user_data") else "anonymous"
+        user_manager.log_door_activity(door_id, "triggered", user_id, user_name)
+        
         return {"message": f"Door {door_id} triggered successfully"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

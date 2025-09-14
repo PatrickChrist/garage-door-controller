@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #389f34 0%, #0085b2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -102,7 +102,7 @@
         }
 
         .door-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #389f34 0%, #0085b2 100%);
             color: white;
             border: none;
             border-radius: 50px;
@@ -116,7 +116,8 @@
 
         .door-button:hover {
             transform: scale(1.05);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 25px rgba(56, 159, 52, 0.3);
+            background: linear-gradient(135deg, #f42b00 0%, #389f34 100%);
         }
 
         .door-button:disabled {
@@ -192,6 +193,84 @@
                 padding: 20px;
             }
         }
+
+        .activity-log {
+            margin-top: 30px;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .activity-log h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            font-weight: 500;
+        }
+
+        .activity-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-info {
+            flex: 1;
+        }
+
+        .activity-action {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .activity-user {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .activity-time {
+            color: #999;
+            font-size: 0.85em;
+            white-space: nowrap;
+            margin-left: 15px;
+        }
+
+        .activity-loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        .show-activity-btn {
+            background: transparent;
+            color: #389f34;
+            border: 2px solid #389f34;
+            border-radius: 25px;
+            padding: 10px 20px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        .show-activity-btn:hover {
+            background: #389f34;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -223,6 +302,17 @@
 
         <div id="connectionStatus" class="connection-status disconnected">
             Connecting...
+        </div>
+        
+        <button id="showActivityBtn" class="show-activity-btn" onclick="toggleActivity()">
+            Show Recent Activity
+        </button>
+        
+        <div id="activityLog" class="activity-log" style="display: none;">
+            <h3>Recent Activity</h3>
+            <div id="activityList" class="activity-list">
+                <div class="activity-loading">Loading activity...</div>
+            </div>
         </div>
     </div>
 
@@ -366,6 +456,80 @@
         checkAuth().then(() => {
             connectWebSocket();
         });
+
+        // Activity log functions
+        let activityVisible = false;
+
+        async function loadActivity() {
+            try {
+                const response = await fetch('/api/activity?limit=20', {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayActivity(data.activities);
+            } catch (error) {
+                console.error('Error loading activity:', error);
+                document.getElementById('activityList').innerHTML = 
+                    '<div class="activity-loading">Failed to load activity</div>';
+            }
+        }
+
+        function displayActivity(activities) {
+            const listEl = document.getElementById('activityList');
+            
+            if (activities.length === 0) {
+                listEl.innerHTML = '<div class="activity-loading">No recent activity</div>';
+                return;
+            }
+            
+            const html = activities.map(activity => {
+                const date = new Date(activity.timestamp);
+                const timeStr = date.toLocaleString();
+                
+                let actionText = activity.action;
+                if (activity.action === 'triggered') {
+                    actionText = `Door ${activity.door_id} triggered`;
+                } else if (activity.action.startsWith('status_changed_to_')) {
+                    const status = activity.action.replace('status_changed_to_', '');
+                    actionText = `Door ${activity.door_id} ${status}`;
+                }
+                
+                const userText = activity.user_name || 'System';
+                
+                return `
+                    <div class="activity-item">
+                        <div class="activity-info">
+                            <div class="activity-action">${actionText}</div>
+                            <div class="activity-user">by ${userText}</div>
+                        </div>
+                        <div class="activity-time">${timeStr}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            listEl.innerHTML = html;
+        }
+
+        function toggleActivity() {
+            const logEl = document.getElementById('activityLog');
+            const btnEl = document.getElementById('showActivityBtn');
+            
+            if (activityVisible) {
+                logEl.style.display = 'none';
+                btnEl.textContent = 'Show Recent Activity';
+                activityVisible = false;
+            } else {
+                logEl.style.display = 'block';
+                btnEl.textContent = 'Hide Recent Activity';
+                activityVisible = true;
+                loadActivity();
+            }
+        }
 
         // Ping WebSocket to keep connection alive
         setInterval(() => {

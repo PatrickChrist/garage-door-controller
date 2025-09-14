@@ -43,6 +43,18 @@ class UserManager:
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS door_activity_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                door_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                user_id INTEGER,
+                user_name TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        """)
+        
         conn.commit()
         conn.close()
     
@@ -213,6 +225,46 @@ class UserManager:
             return True
         except:
             return False
+    
+    def log_door_activity(self, door_id: int, action: str, user_id: Optional[int] = None, user_name: Optional[str] = None):
+        """Log door activity"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO door_activity_log (door_id, action, user_id, user_name)
+                VALUES (?, ?, ?, ?)
+            """, (door_id, action, user_id, user_name))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except:
+            return False
+    
+    def get_door_activity_log(self, limit: int = 50) -> List[Dict]:
+        """Get door activity log"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT door_id, action, user_id, user_name, timestamp
+            FROM door_activity_log 
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (limit,))
+        
+        activities = cursor.fetchall()
+        conn.close()
+        
+        return [{
+            "door_id": activity[0],
+            "action": activity[1],
+            "user_id": activity[2],
+            "user_name": activity[3],
+            "timestamp": activity[4]
+        } for activity in activities]
 
 # Global user manager instance
 user_manager = UserManager()
