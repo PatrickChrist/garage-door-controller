@@ -70,8 +70,8 @@ class GarageDoorController:
             GPIO.gpio_claim_output(self.gpio_handle, self.DOOR1_RELAY, 1)
             GPIO.gpio_claim_output(self.gpio_handle, self.DOOR2_RELAY, 1)
             
-            # Setup sensor pins (input with pull-up)
-            GPIO.gpio_claim_input(self.gpio_handle, self.DOOR1_SENSOR, GPIO.SET_PULL_UP)
+            # Setup sensor pins (input with pull-down for Door 1, pull-up for Door 2)
+            GPIO.gpio_claim_input(self.gpio_handle, self.DOOR1_SENSOR, GPIO.SET_PULL_DOWN)  # Pull-down for weak signal
             if self.DOOR2_SENSOR != self.DOOR1_SENSOR:  # Only claim if different pin
                 GPIO.gpio_claim_input(self.gpio_handle, self.DOOR2_SENSOR, GPIO.SET_PULL_UP)
                 
@@ -84,8 +84,8 @@ class GarageDoorController:
             GPIO.setup(self.DOOR1_RELAY, GPIO.OUT, initial=GPIO.HIGH)
             GPIO.setup(self.DOOR2_RELAY, GPIO.OUT, initial=GPIO.HIGH)
             
-            # Setup sensor pins (input with pull-up)
-            GPIO.setup(self.DOOR1_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            # Setup sensor pins (input with pull-down for Door 1, pull-up for Door 2)
+            GPIO.setup(self.DOOR1_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  # Pull-down for weak signal
             GPIO.setup(self.DOOR2_SENSOR, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         
         # Initialize door states
@@ -118,8 +118,15 @@ class GarageDoorController:
         """Read door sensor (True = open, False = closed)"""
         sensor_pin = self._get_sensor_pin(door_id)
         sensor_value = self._gpio_read(sensor_pin)
-        # Sensors are HIGH when door is closed, so invert the logic
-        return not sensor_value
+        
+        if door_id == 1:
+            # Door 1 has weak signal when closed, using pull-down
+            # LOW = closed (weak signal), HIGH = open (strong signal)
+            return sensor_value  # Return as-is (HIGH = open, LOW = closed)
+        else:
+            # Door 2 has normal signal, using pull-up
+            # HIGH = closed, LOW = open (inverted logic)
+            return not sensor_value
     
     def _update_door_status(self, door_id: int):
         """Update door status based on sensor reading"""
