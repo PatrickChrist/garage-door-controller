@@ -40,8 +40,8 @@ class GarageDoorController:
         # GPIO pin configuration
         self.DOOR1_RELAY = 9     # GPIO 9 for door 1 relay
         self.DOOR2_RELAY = 12    # GPIO 12 for door 2 relay
-        self.DOOR1_SENSOR = 4    # GPIO 4 for door 1 sensor (LOW = closed)
-        self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (LOW = closed) - shared sensor
+        self.DOOR1_SENSOR = 11   # GPIO 11 for door 1 sensor (HIGH = closed)
+        self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (HIGH = closed)
         
         # Door states
         self.door_states = {
@@ -117,7 +117,9 @@ class GarageDoorController:
     def _read_sensor(self, door_id: int) -> bool:
         """Read door sensor (True = open, False = closed)"""
         sensor_pin = self._get_sensor_pin(door_id)
-        return self._gpio_read(sensor_pin)
+        sensor_value = self._gpio_read(sensor_pin)
+        # Sensors are HIGH when door is closed, so invert the logic
+        return not sensor_value
     
     def _update_door_status(self, door_id: int):
         """Update door status based on sensor reading"""
@@ -158,8 +160,13 @@ class GarageDoorController:
         time.sleep(duration)
         self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
         
-        # Wait a moment for door to start moving, then monitor for final state
-        threading.Timer(2.0, self._update_door_status, args=[door_id]).start()
+        # Wait longer for door closing (15 seconds) vs opening (2 seconds)
+        if current_status == DoorStatus.OPEN:
+            # Door is closing - wait 15 seconds before checking final state
+            threading.Timer(15.0, self._update_door_status, args=[door_id]).start()
+        else:
+            # Door is opening - wait 2 seconds before checking final state
+            threading.Timer(2.0, self._update_door_status, args=[door_id]).start()
     
     def get_door_status(self, door_id: int) -> DoorStatus:
         """Get current door status"""
