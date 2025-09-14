@@ -40,7 +40,7 @@ class GarageDoorController:
         # GPIO pin configuration
         self.DOOR1_RELAY = 9     # GPIO 9 for door 1 relay
         self.DOOR2_RELAY = 12    # GPIO 12 for door 2 relay
-        self.DOOR1_SENSOR = 11   # GPIO 11 for door 1 sensor (HIGH = closed)
+        self.DOOR1_SENSOR = 26   # GPIO 26 for door 1 sensor (HIGH = closed)
         self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (HIGH = closed)
         
         # Door states
