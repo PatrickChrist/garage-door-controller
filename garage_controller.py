@@ -40,8 +40,8 @@ class GarageDoorController:
         # GPIO pin configuration
         self.DOOR1_RELAY = 26    # GPIO 26 for door 1 relay
         self.DOOR2_RELAY = 12    # GPIO 12 for door 2 relay
-        self.DOOR1_SENSOR = 4    # GPIO 4 for door 1 sensor (HIGH = closed) - shared with door 2
-        self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (HIGH = closed) - shared sensor
+        self.DOOR1_SENSOR = 17   # GPIO 17 for door 1 sensor (HIGH = closed)
+        self.DOOR2_SENSOR = 4    # GPIO 4 for door 2 sensor (HIGH = closed)
         
         # Door states
         self.door_states = {
@@ -138,7 +138,7 @@ class GarageDoorController:
             self._update_door_status(2)
             time.sleep(0.5)  # Check every 500ms
     
-    def trigger_door(self, door_id: int, duration: float = 1.5):
+    def trigger_door(self, door_id: int, duration: float = 1.7):
         """Trigger garage door opener (simulate button press)"""
         if door_id not in [1, 2]:
             raise ValueError("Door ID must be 1 or 2")
