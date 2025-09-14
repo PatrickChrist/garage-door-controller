@@ -155,10 +155,25 @@ class GarageDoorController:
         if door_id in self.status_callbacks:
             self.status_callbacks[door_id](door_id, self.door_states[door_id])
         
-        # Trigger relay (LOW activates relay)
-        self._gpio_write(relay_pin, False)  # LOW to activate relay
-        time.sleep(duration)
-        self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
+        # Special handling for Door 1 - double trigger if needed
+        if door_id == 1:
+            # First trigger
+            self._gpio_write(relay_pin, False)  # LOW to activate relay
+            time.sleep(duration)
+            self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
+            
+            # Short pause between triggers
+            time.sleep(0.3)
+            
+            # Second trigger for Door 1
+            self._gpio_write(relay_pin, False)  # LOW to activate relay
+            time.sleep(duration)
+            self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
+        else:
+            # Normal single trigger for Door 2
+            self._gpio_write(relay_pin, False)  # LOW to activate relay
+            time.sleep(duration)
+            self._gpio_write(relay_pin, True)   # HIGH to deactivate relay
         
         # Wait longer for door closing (15 seconds) vs opening (2 seconds)
         if current_status == DoorStatus.OPEN:
